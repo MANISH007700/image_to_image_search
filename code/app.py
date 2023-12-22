@@ -8,7 +8,7 @@ import warnings
 warnings.filterwarnings("ignore", category=UserWarning)
 
 import torch
-import torch.nn.functiona as F
+import torch.nn.functional as F
 import clip
 from PIL import Image
 
@@ -28,7 +28,7 @@ class CLIP:
         image = preprocess(Image.open(img_path)).unsqueeze(0).to(self.device)
         return image
 
-    def get_text_similarity_based_on_single_inp_image(self, image_path: str, candidates_name: list[str], model, preprocess) -> dict:
+    def get_text_similarity_based_on_single_inp_image(self, image_path: str, candidates_name: List[str], model, preprocess) -> dict:
 
         # loads and return array info of image
         image = self.preprocess_image(image_path)
@@ -52,18 +52,20 @@ class CLIP:
 
         all_img_dir_embeds = []
         all_image_name = []
-        with torch.no_grads():
+        with torch.no_grad():
             # cal img embeddings for both inp image and ref image dir path
-            inp_embeds = model.encode_image(self.preprocess_image(inp_image_path))
+            inp_embeds = model.encode_image(self.preprocess_image(inp_image_path)).tolist()
             # embeddings all img from ref docs 
             logger.info("Embedding all img from ref image dir ")
             for img in tqdm(os.listdir(ref_image_dir_path)):
-                img_embeds = model.encode_image(self.preprocess_image(os.path.join(ref_image_dir_path, img)))
-                all_img_dir_embeds.append(img_embeds)
-                all_image_name.append(img)
+                # if img in ['human_1.jpeg', 'human_2.jpeg']:
+                if img.split(".")[-1] in ['jpeg', 'jpg', 'png']:
+                  img_embeds = model.encode_image(self.preprocess_image(os.path.join(ref_image_dir_path, img)))
+                  all_img_dir_embeds.append(img_embeds.tolist()[0])
+                  all_image_name.append(img)
         
-        # compare cosine similarity between same
-        cos_sim = F.cosine_similarity(img_embeds, all_img_dir_embeds, dim = 1)
+        # return inp_embeds, all_img_dir_embeds
+        cos_sim = F.cosine_similarity(torch.tensor(inp_embeds), torch.tensor(all_img_dir_embeds), dim = 1)
         logger.debug("All img to ref image embeds cosine score ")
         logger.info(cos_sim)
 
@@ -76,7 +78,6 @@ class CLIP:
         top_k_image_name = [all_image_name[i] for i in top_k]
         
         return {f"Top {k} Sim Images": top_k_image_name, f"Top {k} Sim Image Embeds": top_k_embeds}
-    
 
 if __name__ == "__main__":
     model_name = "ViT-B/32"
